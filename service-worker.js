@@ -15,11 +15,25 @@ const updateRecording = async (state, type) => {
 
 const injectCamera = async () => {
   // inject the content script into the current page
-  const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
+  const activeInfo = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (!activeInfo) return;
 
-  const tabId = tab[0].id;
-  console.log("inject into tab", tabId);
+  const tabId = activeInfo[0].id;
+  const activeTab = await chrome.tabs.get(tabId);
+  if (!activeTab) return;
+  const tabUrl = activeTab.url;
+  // if chrome or extension page, return
+  if (
+    tabUrl.startsWith("chrome://") ||
+    tabUrl.startsWith("chrome-extension://")
+  ) {
+    console.log("chrome or extension page - exiting");
+    return;
+  }
+
   await chrome.scripting.executeScript({
     // content.js is the file that will be injected
     files: ["content.js"],
@@ -29,11 +43,25 @@ const injectCamera = async () => {
 
 const removeCamera = async () => {
   // inject the content script into the current page
-  const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
+  const activeInfo = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (!activeInfo) return;
 
-  const tabId = tab[0].id;
-  console.log("inject into tab", tabId);
+  const tabId = activeInfo[0].id;
+  const activeTab = await chrome.tabs.get(tabId);
+  if (!activeTab) return;
+  const tabUrl = activeTab.url;
+  // if chrome or extension page, return
+  if (
+    tabUrl.startsWith("chrome://") ||
+    tabUrl.startsWith("chrome-extension://")
+  ) {
+    console.log("chrome or extension page - exiting");
+    return;
+  }
+
   await chrome.scripting.executeScript({
     // content.js is the file that will be injected
     func: () => {
@@ -71,6 +99,11 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     recordingType,
     tabUrl,
   });
+
+  if (!tabUrl) {
+    console.log("no tab url - exiting");
+    return;
+  }
 
   if (recording && recordingType === "screen") {
     // inject the camera
@@ -123,6 +156,7 @@ const recordScreen = async () => {
 
   // wait for 500ms send a message to the tab to start recording
   setTimeout(() => {
+    console.log("send message to tab to start recording");
     chrome.tabs.sendMessage(newTab.id, {
       type: "start-recording",
       focusedTabId: currentTabId,
@@ -217,6 +251,4 @@ chrome.runtime.onMessage.addListener(function (request, sender) {
     default:
       console.log("default");
   }
-
-  return true;
 });

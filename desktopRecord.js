@@ -110,6 +110,10 @@ const startRecording = async (focusedTabId) => {
           console.log("send message to open tab", base64);
           chrome.runtime.sendMessage({ type: "open-tab", base64 });
 
+          setTimeout(() => {
+            window.close();
+          }, 500);
+
           data = [];
         };
 

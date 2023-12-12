@@ -1,26 +1,40 @@
-<style>
-  body {
-    width: 270px;
-    height: 100px;
-    background-color: red;
-    margin: 0;
-    padding: 0;
-  }
-  div {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-  }
-</style>
-
-<div>
-  <h1>Record options</h1>
-
-  <div>
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Popup</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        width: 350px;
+      }
+      h1 {
+        font-size: 24px;
+        margin-bottom: 20px;
+      }
+      p {
+        font-size: 16px;
+        margin-bottom: 20px;
+      }
+      button {
+        font-size: 16px;
+        padding: 10px 20px;
+        background-color: #dc3545;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #c82333;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Record your video</h1>
+    <p>Click on the button below to start recording your video.</p>
     <button id="tab">Record Tab</button>
     <button id="screen">Record Screen</button>
-  </div>
-</div>
-
-<script src="popup.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
