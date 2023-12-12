@@ -1,6 +1,3 @@
-
-
-
 const convertBlobToBase64 = (blob) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -19,23 +16,19 @@ const fetchBlob = async (url) => {
   return base64;
 };
 
-
-
-
-// listen for messages from the service worker - start recording  - stop recording  
+// listen for messages from the service worker - start recording  - stop recording
 chrome.runtime.onMessage.addListener(function (request, sender) {
-
-  console.log('message received', request, sender)
+  console.log("message received", request, sender);
 
   switch (request.type) {
-    case 'start-recording':
-      startRecording(request.focusedTabId)
+    case "start-recording":
+      startRecording(request.focusedTabId);
       break;
-    case 'stop-recording':
-      stopRecording()
+    case "stop-recording":
+      stopRecording();
       break;
     default:
-      console.log('default')
+      console.log("default");
   }
 
   return true;
@@ -45,26 +38,25 @@ let recorder;
 let data = [];
 
 const stopRecording = () => {
-  console.log('stop recording')
+  console.log("stop recording");
   if (recorder?.state === "recording") {
     recorder.stop();
     // stop all streams
     recorder.stream.getTracks().forEach((t) => t.stop());
   }
-}
+};
 
-const  startRecording = async (focusedTabId) => {
+const startRecording = async (focusedTabId) => {
   //...
   // use desktopCapture to get the screen stream
   chrome.desktopCapture.chooseDesktopMedia(
     ["screen", "window"],
     async function (streamId) {
-
       if (streamId === null) {
         return;
       }
       // have stream id
-      console.log('stream id from desktop capture', streamId)
+      console.log("stream id from desktop capture", streamId);
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -81,8 +73,7 @@ const  startRecording = async (focusedTabId) => {
         },
       });
 
-
-      console.log('stream from desktop capture', stream)
+      console.log("stream from desktop capture", stream);
 
       // get the microphone stream
       const microphone = await navigator.mediaDevices.getUserMedia({
@@ -91,51 +82,51 @@ const  startRecording = async (focusedTabId) => {
 
       // check that the microphone stream has audio tracks
       if (microphone.getAudioTracks().length !== 0) {
-      
-        
         const combinedStream = new MediaStream([
           stream.getVideoTracks()[0],
           microphone.getAudioTracks()[0],
         ]);
 
-        console.log('combined stream', combinedStream)
+        console.log("combined stream", combinedStream);
 
         recorder = new MediaRecorder(combinedStream, {
           mimeType: "video/webm",
         });
 
-         // listen for data
+        // listen for data
         recorder.ondataavailable = (event) => {
-          console.log('data available', event)
+          console.log("data available", event);
           data.push(event.data);
-        }
+        };
 
         // listen for when recording stops
         recorder.onstop = async () => {
-          console.log('recording stopped')
+          console.log("recording stopped");
           // send the data to the service worker
           const blobFile = new Blob(data, { type: "video/webm" });
           const base64 = await fetchBlob(URL.createObjectURL(blobFile));
-          
+
           // send message to service worker to open tab
           console.log("send message to open tab", base64);
-          chrome.runtime.sendMessage({ type: 'open-tab', base64 })
+          chrome.runtime.sendMessage({ type: "open-tab", base64 });
 
-          data = []
-        }
+          setTimeout(() => {
+            window.close();
+          }, 500);
+
+          data = [];
+        };
 
         // start recording
         recorder.start();
 
-        // set focus back to the previous tab 
-        if(focusedTabId) {
-          chrome.tabs.update(focusedTabId, { active: true })
+        // set focus back to the previous tab
+        if (focusedTabId) {
+          chrome.tabs.update(focusedTabId, { active: true });
         }
-
       }
 
-      return
-
-      
-    })
-}
+      return;
+    }
+  );
+};
