@@ -7,6 +7,8 @@ const injectCamera = async () => {
   if (!tab) return;
 
   const tabId = tab[0].id;
+
+  // TODO - check if can inject to url
   console.log("inject into tab", tabId);
   await chrome.scripting.executeScript({
     // content.js is the file that will be injected
@@ -22,6 +24,8 @@ const removeCamera = async () => {
 
   const tabId = tab[0].id;
   console.log("inject into tab", tabId);
+
+  // TODO - check if can inject to url
   await chrome.scripting.executeScript({
     // content.js is the file that will be injected
     func: () => {
@@ -74,7 +78,7 @@ const init = async () => {
     }
 
     // close popup
-    window.close();
+    // window.close();
   };
 
   recordTab.addEventListener("click", async () => {

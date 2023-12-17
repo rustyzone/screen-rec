@@ -1,36 +1,83 @@
-// listen for messages from the service worker
-chrome.runtime.onMessage.addListener((message, sender) => {
-  console.log("[offscreen] message received", message, sender);
+let db;
 
-  switch (message.type) {
-    case "start-recording":
-      console.log("offscreen start recording tab");
-      startRecording(message.data);
-      break;
-    case "stop-recording":
-      console.log("stop recording tab");
-      stopRecording();
-      break;
-    default:
-      console.log("default");
+const openDatabase = async () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("RecordingsDB", 1);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      db.createObjectStore("recordings", {
+        autoIncrement: true,
+        keyPath: "id",
+      });
+    };
+
+    request.onsuccess = (event) => {
+      db = event.target.result;
+      resolve();
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+};
+
+// Use this function to save a recorded chunk to IndexedDB
+const saveChunkToDB = (chunk) => {
+  const transaction = db.transaction(["recordings"], "readwrite");
+  const objectStore = transaction.objectStore("recordings");
+
+  const request = objectStore.add({ chunk });
+
+  request.onerror = (event) => {
+    console.error("Error adding chunk to IndexedDB:", event.target.error);
+  };
+};
+
+// Use this function to retrieve all recorded chunks from IndexedDB
+const getAllChunksFromDB = () => {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["recordings"], "readonly");
+    const objectStore = transaction.objectStore("recordings");
+
+    const chunks = [];
+
+    const request = objectStore.openCursor();
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        chunks.push(cursor.value.chunk);
+        cursor.continue();
+      } else {
+        resolve(chunks);
+      }
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+};
+
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  if (message.target === "offscreen") {
+    switch (message.type) {
+      case "start-recording":
+        startRecording(message.data);
+        break;
+      case "stop-recording":
+        stopRecording();
+        break;
+      default:
+        throw new Error("Unrecognized message:", message.type);
+    }
   }
-
-  return true;
 });
 
 let recorder;
-let data = [];
-
-async function stopRecording() {
-  console.log("stop recording");
-
-  if (recorder?.state === "recording") {
-    recorder.stop();
-
-    // stop all streams
-    recorder.stream.getTracks().forEach((t) => t.stop());
-  }
-}
+// let data = [];
 
 async function startRecording(streamId) {
   try {
@@ -40,7 +87,8 @@ async function startRecording(streamId) {
 
     console.log("start recording", streamId);
 
-    // use the tabCaptured streamId
+    await openDatabase(); // Open the IndexedDB database
+
     const media = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
@@ -60,7 +108,7 @@ async function startRecording(streamId) {
     const microphone = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false },
     });
-    // combine the streams
+
     const mixedContext = new AudioContext();
     const mixedDest = mixedContext.createMediaStreamDestination();
 
@@ -74,28 +122,46 @@ async function startRecording(streamId) {
 
     recorder = new MediaRecorder(combinedStream, { mimeType: "video/webm" });
 
-    // listen for data
+    // TODO make this an option
+    // Continue to play the captured audio to the user.
+    // const output = new AudioContext();
+    // const source = output.createMediaStreamSource(media);
+    // source.connect(output.destination);
+
     recorder.ondataavailable = (event) => {
-      console.log("data available", event);
-      data.push(event.data);
+      // data.push(event.data);
+      // Save the chunk to IndexedDB
+      saveChunkToDB(event.data);
     };
-
-    // listen for when recording stops
     recorder.onstop = async () => {
-      console.log("recording stopped");
-      // send the data to the service worker
-      console.log("sending data to service worker");
+      const chunks = await getAllChunksFromDB();
+      const blob = new Blob(chunks, { type: "video/webm" });
+      // TODO - handle the upload now and begin to process the video blob and parse the transcript for AI analysis
+      // Create a URL for the blob
+      const videoUrl = URL.createObjectURL(blob);
 
-      // convert this into a blog and open window
-      const blob = new Blob(data, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
       // send message to service worker to open tab
-      chrome.runtime.sendMessage({ type: "open-tab", url });
-    };
+      console.log("open tab", videoUrl);
+      chrome.runtime.sendMessage({ type: "open-tab", url: videoUrl });
 
-    // start recording
+      // Clear state ready for next recording
+      recorder = undefined;
+
+      // clear IndexedDB
+      const transaction = db.transaction(["recordings"], "readwrite");
+      const objectStore = transaction.objectStore("recordings");
+      objectStore.clear();
+    };
     recorder.start();
-  } catch (err) {
-    console.log("error", err);
+  } catch (error) {
+    console.error("error", error);
+  }
+}
+
+async function stopRecording() {
+  if (recorder && recorder.stream) {
+    recorder.stop();
+    // Stopping the tracks makes sure the recording icon in the tab is removed.
+    recorder.stream.getTracks().forEach((t) => t.stop());
   }
 }
